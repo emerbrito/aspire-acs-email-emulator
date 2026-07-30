@@ -1,0 +1,19 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <UserSecretsId>c7ebcd75-551f-4de3-9c27-cf3ca428e16d</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Azure.AppContainers" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\EmBrito.Aspire.Hosting.Azure.CommunicationServices.Email\EmBrito.Aspire.Hosting.Azure.CommunicationServices.Email.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\CommunicationEmail.Api\CommunicationEmail.Api.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="EmBrito.Aspire.Azure.CommunicationServices.Email/EmBrito.Aspire.Azure.CommunicationServices.Email.csproj" />
+    <Project Path="EmBrito.Aspire.Azure.CommunicationServices.Email.Emulator/EmBrito.Aspire.Azure.CommunicationServices.Email.Emulator.csproj" />
+    <Project Path="EmBrito.Aspire.Hosting.Azure.CommunicationServices.Email/EmBrito.Aspire.Hosting.Azure.CommunicationServices.Email.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EmBrito.Aspire.Azure.CommunicationServices.Email.Tests/EmBrito.Aspire.Azure.CommunicationServices.Email.Tests.csproj" />
+    <Project Path="tests/EmBrito.Aspire.Azure.CommunicationServices.Email.Emulator.Tests/EmBrito.Aspire.Azure.CommunicationServices.Email.Emulator.Tests.csproj" />
+    <Project Path="tests/EmBrito.Aspire.Hosting.Azure.CommunicationServices.Email.Tests/EmBrito.Aspire.Hosting.Azure.CommunicationServices.Email.Tests.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/CommunicationEmail.AppHost/CommunicationEmail.AppHost.csproj" />
+    <Project Path="samples/CommunicationEmail.Api/CommunicationEmail.Api.csproj" />
+    <Project Path="samples/CommunicationEmail.ServiceDefaults/CommunicationEmail.ServiceDefaults.csproj" />
+  </Folder>
+</Solution>

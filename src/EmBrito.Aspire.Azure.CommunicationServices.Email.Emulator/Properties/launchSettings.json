@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "EmBrito.Aspire.Azure.CommunicationServices.Email.Emulator": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:56361;http://localhost:56362"
+    }
+  }
+}

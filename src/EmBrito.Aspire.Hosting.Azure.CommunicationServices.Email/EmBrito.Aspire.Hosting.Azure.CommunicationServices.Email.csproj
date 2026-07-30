@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Title>Azure Communication Services Email Emulator for Aspire</Title>
+    <Description>AppHost package for the Azure Communication Services Email Emulator for Aspire.</Description>
+    <PackageTags>aspire;emulator;azure;communication-services;email;apphost;hosting</PackageTags>
+    <PackageReadmeFile>EmBrito.Aspire.Hosting.Azure.CommunicationServices.Email.md</PackageReadmeFile>
+    <NoWarn>$(NoWarn);ASPIREAZURE003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Azure" />
+    <PackageReference Include="Azure.Provisioning.Communication" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\docs\nuget\EmBrito.Aspire.Hosting.Azure.CommunicationServices.Email.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EmBrito.Aspire.Hosting.Azure.CommunicationServices.Email.Tests" />
+  </ItemGroup>
+</Project>

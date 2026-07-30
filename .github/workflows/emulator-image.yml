@@ -1,0 +1,238 @@
+name: Emulator container image
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Push the image to GHCR after validation
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: emulator-image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  IMAGE_NAME: ghcr.io/emerbrito/aspire-acs-email-emulator
+  LOCAL_IMAGE: aspire-acs-email-emulator:validation
+  SOLUTION: src/EmBrito.Aspire.Azure.CommunicationServices.Email.slnx
+  HOSTING_PROJECT: src/EmBrito.Aspire.Hosting.Azure.CommunicationServices.Email/EmBrito.Aspire.Hosting.Azure.CommunicationServices.Email.csproj
+  CLIENT_PROJECT: src/EmBrito.Aspire.Azure.CommunicationServices.Email/EmBrito.Aspire.Azure.CommunicationServices.Email.csproj
+  PACKAGE_OUTPUT: artifacts/packages
+  DOCKERFILE: src/EmBrito.Aspire.Azure.CommunicationServices.Email.Emulator/Dockerfile
+
+jobs:
+  validate:
+    name: Build, test, and scan
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: src/global.json
+
+      - name: Determine release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="$(dotnet msbuild "$HOSTING_PROJECT" -getProperty:PackageVersion -nologo)"
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::The centrally configured version '$VERSION' is not SemVer-compatible."
+            exit 1
+          fi
+
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release version: $VERSION"
+
+      - name: Restore
+        run: dotnet restore "$SOLUTION"
+
+      - name: Verify formatting
+        run: dotnet format "$SOLUTION" --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build "$SOLUTION" --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test "$SOLUTION" --configuration Release --no-build --no-restore
+
+      - name: Pack NuGet packages
+        run: |
+          dotnet pack "$HOSTING_PROJECT" \
+            --configuration Release \
+            --no-build \
+            --no-restore \
+            --output "$PACKAGE_OUTPUT"
+          dotnet pack "$CLIENT_PROJECT" \
+            --configuration Release \
+            --no-build \
+            --no-restore \
+            --output "$PACKAGE_OUTPUT"
+
+      - name: Build validation image
+        run: >-
+          docker build
+          --file "$DOCKERFILE"
+          --tag "$LOCAL_IMAGE"
+          --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}"
+          --label "org.opencontainers.image.revision=${{ github.sha }}"
+          --label "org.opencontainers.image.version=${{ steps.version.outputs.value }}"
+          src
+
+      - name: Smoke test validation image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          container_id="$(docker run --detach --publish 127.0.0.1::8080 "$LOCAL_IMAGE")"
+          trap 'docker rm --force "$container_id" >/dev/null 2>&1 || true' EXIT
+          host_port="$(docker inspect \
+            --format '{{ (index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort }}' \
+            "$container_id")"
+
+          for _ in {1..30}; do
+            if curl --fail --silent --show-error "http://127.0.0.1:${host_port}/livez" >/dev/null; then
+              curl --fail --silent --show-error "http://127.0.0.1:${host_port}/" \
+                | grep --fixed-strings "Azure Communication Services Email Emulator" >/dev/null
+              exit 0
+            fi
+
+            if ! docker inspect --format '{{.State.Running}}' "$container_id" | grep --quiet true; then
+              docker logs "$container_id"
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          docker logs "$container_id"
+          echo "::error::The validation container did not become healthy."
+          exit 1
+
+      - name: Scan validation image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.LOCAL_IMAGE }}
+          format: table
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+  publish:
+    name: Publish multi-platform image
+    needs: validate
+    if: ${{ inputs.publish }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: container-release
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Require the default branch
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" != "refs/heads/${{ github.event.repository.default_branch }}" ]]; then
+            echo "::error::Publishing is allowed only from the repository's default branch."
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require an unpublished version
+        shell: bash
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if docker buildx imagetools inspect "$IMAGE_NAME:$VERSION" >/dev/null 2>&1; then
+            echo "::error::Image version '$VERSION' already exists and cannot be overwritten."
+            exit 1
+          fi
+
+      - name: Generate image metadata
+        id: metadata
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ needs.validate.outputs.version }}
+            type=sha,format=long,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=Azure Communication Services Email Emulator
+            org.opencontainers.image.description=Azure Communication Services Email Emulator for Aspire. Captures local email from Microsoft's Azure Email SDK and shows it in a browser inbox.
+            org.opencontainers.image.licenses=MIT
+          annotations: |
+            org.opencontainers.image.title=Azure Communication Services Email Emulator
+            org.opencontainers.image.description=Azure Communication Services Email Emulator for Aspire. Captures local email from Microsoft's Azure Email SDK and shows it in a browser inbox.
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build and push multi-platform image
+        id: push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: src
+          file: ${{ env.DOCKERFILE }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          annotations: ${{ steps.metadata.outputs.annotations }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Attest build provenance
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Verify the published image
+        shell: bash
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          docker pull --platform linux/amd64 "$IMAGE_NAME:$VERSION"
+          pulled_digest="$(docker inspect \
+            --format '{{index .RepoDigests 0}}' \
+            "$IMAGE_NAME:$VERSION")"
+
+          echo "Published and verified: $pulled_digest"

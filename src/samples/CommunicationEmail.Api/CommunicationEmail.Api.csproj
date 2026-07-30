@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\EmBrito.Aspire.Azure.CommunicationServices.Email\EmBrito.Aspire.Azure.CommunicationServices.Email.csproj" />
+    <ProjectReference Include="..\CommunicationEmail.ServiceDefaults\CommunicationEmail.ServiceDefaults.csproj" />
+  </ItemGroup>
+</Project>
